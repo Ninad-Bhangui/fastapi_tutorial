@@ -54,14 +54,14 @@ async def read_cookies(cookie_id: Optional[str] = Cookie(None)):
 async def read_header(user_agent: Optional[str] = Header(None),accept: Optional[str] = Header(None),cache_control: Optional[str] = Header(None)):
     return {"User-Agent": user_agent, "Accept": accept, "Cache-Control": cache_control}
 
-@app.get("/items/")
+@app.get("/items/", tags=["items"])
 async def get_items(skip: int =0, limit: int = 10,q: Optional[str] = Query(..., min_length=3, max_length=50, regex="^fixedquery$", alias="item-query",deprecated=True)):
     results = {"items":fake_items_db[skip: skip + limit]}
     if q:
         results.update({"q":q})
     return results
 
-@app.get("/items/{item_id}")
+@app.get("/items/{item_id}", tags=["items"])
 async def read_item(item_id: int = Path(..., title="The ID of the item to get", gt=0, le=1000), q: Optional[str] = None, short: bool = False):
     item = {"item_id": item_id}
     if q:
@@ -70,11 +70,20 @@ async def read_item(item_id: int = Path(..., title="The ID of the item to get", 
         item.update({"descripton": "This is an amazing item with a long description"})
     return item
 
-@app.post("/items/", response_model=Item)
+@app.post("/items/", tags=["items"])
 async def create_item(item: Item, user: User, importance: int = Body(None, gt =0)):
     print(importance)
     results = {"item": item, "user": user, "importance": importance}
     return results
+
+@app.patch("/items/{item_id}", response_model=Item, tags=["items"])
+async def update_item(item_id: str, item: Item):
+    stored_item_data = items[item_id]
+    stored_item_model = Item(**stored_item_data)
+    update_data = item.dict(exclude_unset=True)
+    updated_item = stored_item_model.copy(update=update_data)
+    items[item_id] = jsonable_encoder(updated_item)
+    return updated_item
 
 @app.get("/users/{user_id}/items/{item_id}")
 async def read_user_item(
