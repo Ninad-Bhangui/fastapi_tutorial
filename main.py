@@ -1,7 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Cookie, Header, File, UploadFile
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel
+from typing import Optional, List
+from pydantic import BaseModel, Field, HttpUrl
+
+class Image(BaseModel):
+    url: HttpUrl
+    name: str
 
 class ModelName(str, Enum):
     alexnet = "alexnet"
@@ -9,10 +13,26 @@ class ModelName(str, Enum):
     lenet = "lenet"
 
 class Item(BaseModel):
-    name: str
-    description: Optional[str] = None
-    price: float
-    tax: Optional[float] = None
+    name: str = Field(...,example="Foo")
+    description: Optional[str] = Field(None, title="Description", max_length=300, example="Nice item")
+    price: float = Field(...,gt=0,description="The price must be greater than zero", example=3.5)
+    tax: Optional[float] = Field(None,example=0.5)
+    tags: List[str] = Field([],example=['a','b'])
+    image: Optional[Image] = Field(None,example={"url": "https://imgur.com/foo.png", "name": "foo.png"})
+
+    class Config:
+        scheme_extra = {
+            "example": {
+                "name": "Foo",
+                "description": "Nice item",
+                "price": 35.4,
+                "tax": 3.2,
+                "image": {
+                    "url": "https://imgur.com/foo.png",
+                    "name": "foo.png"
+                }
+            }
+        }
 
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
 
@@ -21,6 +41,14 @@ app = FastAPI()
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+@app.get("/cookies/")
+async def read_cookies(cookie_id: Optional[str] = Cookie(None)):
+    return {"cookie_id": cookie_id}
+
+@app.get("/headers/")
+async def read_header(user_agent: Optional[str] = Header(None),accept: Optional[str] = Header(None),cache_control: Optional[str] = Header(None)):
+    return {"User-Agent": user_agent, "Accept": accept, "Cache-Control": cache_control}
 
 @app.get("/items/")
 async def read_item(skip: int =0, limit: int = 10):
@@ -35,7 +63,7 @@ async def read_item(item_id: int, q: Optional[str] = None, short: bool = False):
         item.update({"descripton": "This is an amazing item with a long description"})
     return item
 
-@app.post("/items/")
+@app.post("/items/", response_model=Item)
 async def create_item(item: Item):
     return item
 
@@ -74,3 +102,11 @@ async def get_model(model_name: ModelName):
 @app.get("/files/{file_path:path}")
 async def read_file(file_path: str):
     return {"file_path": file_path}
+
+@app.post("/files/")
+async def create_file(file: bytes = File(...)):
+    return {"file_size": len(file)}
+
+@app.post("/uploadfile/")
+async def create_upload_file(file: UploadFile = File(...)):
+    return {"filename": file.filename}
