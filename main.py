@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI,Query, Path, Body
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel
@@ -14,6 +14,10 @@ class Item(BaseModel):
     price: float
     tax: Optional[float] = None
 
+class User(BaseModel):
+    username: str
+    full_name: Optional[str] = None
+
 fake_items_db = [{"item_name": "Foo"}, {"item_name": "Bar"}, {"item_name": "Baz"}]
 
 app = FastAPI()
@@ -23,11 +27,14 @@ async def root():
     return {"message": "Hello World"}
 
 @app.get("/items/")
-async def read_item(skip: int =0, limit: int = 10):
-    return fake_items_db[skip: skip + limit]
+async def get_items(skip: int =0, limit: int = 10,q: Optional[str] = Query(..., min_length=3, max_length=50, regex="^fixedquery$", alias="item-query",deprecated=True)):
+    results = {"items":fake_items_db[skip: skip + limit]}
+    if q:
+        results.update({"q":q})
+    return results
 
 @app.get("/items/{item_id}")
-async def read_item(item_id: int, q: Optional[str] = None, short: bool = False):
+async def read_item(item_id: int = Path(..., title="The ID of the item to get", gt=0, le=1000), q: Optional[str] = None, short: bool = False):
     item = {"item_id": item_id}
     if q:
         item.update({"item_id": item_id, "q": q})
@@ -36,8 +43,10 @@ async def read_item(item_id: int, q: Optional[str] = None, short: bool = False):
     return item
 
 @app.post("/items/")
-async def create_item(item: Item):
-    return item
+async def create_item(item: Item, user: User, importance: int = Body(None, gt =0)):
+    print(importance)
+    results = {"item": item, "user": user, "importance": importance}
+    return results
 
 @app.get("/users/{user_id}/items/{item_id}")
 async def read_user_item(
